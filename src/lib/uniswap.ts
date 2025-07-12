@@ -8,7 +8,7 @@ const v4Subgraph =
 const v3Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1";
 
-const threeDaysAgoTimestamp = Math.floor(Date.now() / 1000) - 9 * 24 * 60 * 60;
+const threeDaysAgoTimestamp = Math.floor(Date.now() / 1000) - 1 * 24 * 60 * 60;
 
 const query = `
 query BalancedPoolsLast3Days {
@@ -72,7 +72,14 @@ const getBalancedPoolsLast3Days = async () => {
     ...v4Response.data.data.poolDayDatas,
   ];
 
-  return allPools
+  const poolMap = new Map<string, UniswapPoolDayData>();
+  for (const pool of allPools) {
+    const key = [pool.pool.token0.symbol, pool.pool.token1.symbol].sort().join(":");
+    if (!poolMap.has(key) || Number(pool.feesUSD) > Number(poolMap.get(key)?.feesUSD ?? 0)) {
+      poolMap.set(key, pool);
+    }
+  }
+  return Array.from(poolMap.values())
     .sort((a, b) => Number(b.feesUSD) - Number(a.feesUSD))
     .slice(0, 10);
 };
