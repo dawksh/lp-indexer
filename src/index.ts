@@ -1,8 +1,7 @@
-import { getBalancedPoolsLast3Days } from "./lib/uniswap";
+import "./lib/env";
 
 const main = async () => {
-  const pools = await getBalancedPoolsLast3Days();
-  console.log(pools);
+
 };
 
 main();
