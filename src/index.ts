@@ -2,7 +2,6 @@ import "./lib/env";
 import { bot } from "./lib/telegram";
 import { Markup } from "telegraf";
 import type { UniswapPoolDayData } from "./types/uniswap";
-import { abbreviateNumbers } from "./lib/utils";
 import { getOrCreateWallet } from "./lib/privy";
 import { formatEther, parseEther } from "viem";
 import redis from "./lib/redis";
@@ -118,6 +117,7 @@ Select Amount to add to LP\n
       ctx.reply("Insufficient balance");
       return;
     }
+    
     if (pool && user) {
       ctx.answerCbQuery();
       ctx.reply(`Adding LP... ${amount} ${token}`);

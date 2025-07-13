@@ -108,4 +108,8 @@ const getBalancedPoolsDaysAgoCache = async (days: number) => {
   return lastTokens;
 };
 
+const addLiquidity = async (amount: string, pool: UniswapPoolDayData) => {
+  
+}
+
 export { getBalancedPoolsDaysAgoCache };
