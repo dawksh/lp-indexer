@@ -8,43 +8,43 @@ const v4Subgraph =
 const v3Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1";
 
-const now = new Date();
-now.setUTCDate(now.getUTCDate() - 1);
-const timestamp = Math.floor(now.getTime() / 1000);
-
-const query = `
-query BalancedPoolsLast3Days {
-  poolDayDatas(
-    first: 1000
-    orderBy: feesUSD
-    orderDirection: desc
-    where: {
-      date_gte: ${timestamp}
-      tvlUSD_gte: 100000
-    }
-  ) {
-    pool {
-      id
-      token0 {
-        symbol
+  
+  const getBalancedPoolsDaysAgo = async (days: number) => {
+      const now = new Date();
+      now.setUTCDate(now.getUTCDate() - days);
+      const timestamp = Math.floor(now.getTime() / 1000);
+      
+      const query = `
+      query BalancedPoolsDaysAgo {
+        poolDayDatas(
+          first: 1000
+          orderBy: feesUSD
+          orderDirection: desc
+          where: {
+            date_gte: ${timestamp}
+            tvlUSD_gte: 100000
+          }
+        ) {
+          pool {
+            id
+            token0 {
+              symbol
+            }
+            token1 {
+              symbol
+            }
+            feeTier
+            totalValueLockedUSD
+          }
+          date
+          volumeUSD
+          feesUSD
+          tvlUSD
+          txCount
+        }
       }
-      token1 {
-        symbol
-      }
-      feeTier
-      totalValueLockedUSD
-    }
-    date
-    volumeUSD
-    feesUSD
-    tvlUSD
-    txCount
-  }
-}
-`;
-
-const getBalancedPoolsLast3Days = async () => {
-  const [v3Response, v4Response] = await Promise.all([
+      `;
+      const [v3Response, v4Response] = await Promise.all([
     axios.post<{ data: { poolDayDatas: UniswapPoolDayData[] } }>(
       v4Subgraph,
       {
@@ -90,4 +90,4 @@ const getBalancedPoolsLast3Days = async () => {
     }))
 };
 
-export { getBalancedPoolsLast3Days };
+export { getBalancedPoolsDaysAgo };

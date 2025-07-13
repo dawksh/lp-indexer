@@ -1,8 +1,9 @@
 import "./lib/env";
 import { bot } from "./lib/telegram";
-import { getBalancedPoolsLast3Days } from "./lib/uniswap";
+import { getBalancedPoolsDaysAgo } from "./lib/uniswap";
 import { Markup } from "telegraf";
 import type { UniswapPoolDayData } from "./types/uniswap";
+import { abbreviateNumbers } from "./lib/utils";
 let lastTokens: (UniswapPoolDayData & { apr: number })[] = [];
 
 bot.launch(() => {
@@ -14,21 +15,24 @@ bot.command("start", (ctx) => {
 })
 
 bot.command("ape", async (ctx) => {
-    lastTokens = await getBalancedPoolsLast3Days();
+    lastTokens = await getBalancedPoolsDaysAgo(1);
+    let msg = "Choose a token from the below trending list:\n\n";
     const rows = lastTokens.map((pool, i) => [
-        Markup.button.url(
-            `${pool.pool.token0.symbol}/${pool.pool.token1.symbol}`,
-            `https://app.uniswap.org/explore/pools/base/${pool.pool.id}`
-        ),
         Markup.button.callback(
-            "Details",
+            `${pool.pool.token0.symbol}/${pool.pool.token1.symbol}`,
             `pool_${i}`
+        ),
+        Markup.button.url(
+            "Dex",
+            `https://app.uniswap.org/explore/pools/base/${pool.pool.id}`
         )
     ]);
-    await ctx.reply(
-        "Top 10 Uniswap Pools (last 3 days):",
-        Markup.inlineKeyboard(rows)
-    );
+    lastTokens.forEach((pool, i) => {
+        const tvl = `$${abbreviateNumbers(Number(pool.tvlUSD))}`;
+        const vol = `$${abbreviateNumbers(Number(pool.volumeUSD))}`;
+        msg += `${i+1}. ${pool.pool.token0.symbol}/${pool.pool.token1.symbol} | TVL: ${tvl} | Volume 24h: ${vol} | APR: ${pool.apr.toFixed(2)}%\n\n`;
+    });
+    await ctx.reply(msg, Markup.inlineKeyboard(rows));
 });
 
 bot.on("callback_query", (ctx) => {
