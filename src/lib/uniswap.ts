@@ -8,7 +8,9 @@ const v4Subgraph =
 const v3Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1";
 
-const threeDaysAgoTimestamp = Math.floor(Date.now() / 1000) - 1 * 24 * 60 * 60;
+const now = new Date();
+now.setUTCDate(now.getUTCDate() - 1);
+const timestamp = Math.floor(now.getTime() / 1000);
 
 const query = `
 query BalancedPoolsLast3Days {
@@ -17,7 +19,7 @@ query BalancedPoolsLast3Days {
     orderBy: feesUSD
     orderDirection: desc
     where: {
-      date_gte: ${threeDaysAgoTimestamp}
+      date_gte: ${timestamp}
       tvlUSD_gte: 100000
     }
   ) {
@@ -81,7 +83,11 @@ const getBalancedPoolsLast3Days = async () => {
   }
   return Array.from(poolMap.values())
     .sort((a, b) => Number(b.feesUSD) - Number(a.feesUSD))
-    .slice(0, 10);
+    .slice(0, 10)
+    .map((pool) => ({
+        ...pool,
+        apr: (Number(pool.feesUSD) / Number(pool.tvlUSD)) * (365) * 100
+    }))
 };
 
 export { getBalancedPoolsLast3Days };
