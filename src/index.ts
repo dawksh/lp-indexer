@@ -1,14 +1,15 @@
 import "./lib/env";
 import { bot } from "./lib/telegram";
-import { getBalancedPoolsDaysAgo } from "./lib/uniswap";
 import { Markup } from "telegraf";
 import type { UniswapPoolDayData } from "./types/uniswap";
 import { abbreviateNumbers } from "./lib/utils";
 import { getOrCreateWallet } from "./lib/privy";
 import { formatEther, parseEther } from "viem";
-let lastTokens: (UniswapPoolDayData & { apr: number })[] = [];
+import redis from "./lib/redis";
+import { getBalancedPoolsDaysAgoCache } from "./lib/uniswap";
 
-bot.launch(() => {
+bot.launch(async () => {
+  await redis.connect();
   console.log("🚀 Bot started");
 });
 
@@ -33,29 +34,36 @@ bot.command("start", async (ctx) => {
 });
 
 bot.command("lp", async (ctx) => {
-  lastTokens = await getBalancedPoolsDaysAgo(1);
+  const userId = ctx.from?.id?.toString();
+  if (!userId) return ctx.reply("User not found");
+  const redisKey = `lastTokens:${userId}`;
+  let lastTokens: (UniswapPoolDayData & { apr: number })[] = [];
+  const cached = await redis.get(redisKey);
+  if (cached) {
+    lastTokens = JSON.parse(cached);
+  } else {
+    lastTokens = await getBalancedPoolsDaysAgoCache(2);
+    await redis.set(redisKey, JSON.stringify(lastTokens), { EX: 300 });
+  }
   let msg = "Choose a token from the below trending list:\n\n";
   const rows = lastTokens.map((pool, i) => [
     Markup.button.callback(
-      `${pool.pool.token0.symbol}/${pool.pool.token1.symbol}`,
+      `${pool.pool.token0.symbol}/${
+        pool.pool.token1.symbol
+      } | APR: ${pool.apr.toFixed(2)}%`,
       `pool_${i}`
     ),
-    Markup.button.url(
-      "Dex",
-      `https://app.uniswap.org/explore/pools/base/${pool.pool.id}`
-    ),
   ]);
-  lastTokens.forEach((pool, i) => {
-    const tvl = `$${abbreviateNumbers(Number(pool.tvlUSD))}`;
-    const vol = `$${abbreviateNumbers(Number(pool.volumeUSD))}`;
-    msg += `${i + 1}. ${pool.pool.token0.symbol}/${
-      pool.pool.token1.symbol
-    } | TVL: ${tvl} | Volume 24h: ${vol} | APR: ${pool.apr.toFixed(2)}%\n\n`;
-  });
   await ctx.reply(msg, Markup.inlineKeyboard(rows));
 });
 
 bot.on("callback_query", async (ctx) => {
+  const userId = ctx.from?.id?.toString();
+  if (!userId) return ctx.reply("User not found");
+  const redisKey = `lastTokens:${userId}`;
+  const cached = await redis.get(redisKey);
+  let lastTokens: (UniswapPoolDayData & { apr: number })[] = [];
+  if (cached) lastTokens = JSON.parse(cached);
   const data = (ctx.callbackQuery as any)?.data as string | undefined;
   if (typeof data === "string" && data.startsWith("pool_")) {
     const idx = Number(data.replace("pool_", ""));
@@ -63,21 +71,19 @@ bot.on("callback_query", async (ctx) => {
     if (pool) {
       ctx.answerCbQuery();
       ctx.reply(
-        `${pool.pool.token0.symbol}/${pool.pool.token1.symbol}\n
-        \nFee Tier: ${
-          pool.pool.feeTier
-        }\nTVL: $${Number(
+        `${pool.pool.token0.symbol} / ${pool.pool.token1.symbol} 🪙\n\n💸 <b>Fee Tier:</b> <code>${pool.pool.feeTier}</code>\n💰 <b>TVL:</b> <code>$${Number(
           pool.pool.totalValueLockedUSD
-        ).toLocaleString()}\nVolume: $${Number(
-          pool.volumeUSD
-        ).toLocaleString()}\nFees: $${Number(
-          pool.feesUSD
-        ).toLocaleString()}\nTx Count: ${pool.txCount}\nAPR: ${pool.apr.toFixed(
-          2
-        )}%`,
-        Markup.inlineKeyboard([
-          [Markup.button.callback("Open Position", `open_position_${idx}`)],
-        ])
+        ).toLocaleString()}</code>\n📊 <b>Volume:</b> <code>$${Number(pool.volumeUSD).toLocaleString()}</code>\n💵 <b>Fees:</b> <code>$${Number(pool.feesUSD).toLocaleString()}</code>\n🔄 <b>Tx Count:</b> <code>${pool.txCount}</code>\n📈 <b>APR:</b> <code>${pool.apr.toFixed(2)}%</code>`,
+        {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback("🚀 Open Position", `open_position_${idx}`)],
+            [Markup.button.url(
+              "🔗 View on Uniswap",
+              `https://app.uniswap.org/explore/pools/base/${pool.pool.id}`
+            )],
+          ])
+        }
       );
     } else {
       ctx.answerCbQuery("Pool not found");
@@ -104,8 +110,11 @@ Select Amount to add to LP\n
   if (typeof data === "string" && data.startsWith("add_lp_")) {
     const [_, idx, amount, token] = data.split("_");
     const pool = lastTokens[Number(idx)];
-    const user = await getOrCreateWallet(ctx.from?.id.toString() || "", ctx.from?.username || "");
-    if(user.balance < parseEther(amount!)) {
+    const user = await getOrCreateWallet(
+      ctx.from?.id.toString() || "",
+      ctx.from?.username || ""
+    );
+    if (user.balance < parseEther(amount!)) {
       ctx.reply("Insufficient balance");
       return;
     }

@@ -7,6 +7,7 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string(),
   PRIVY_APP_ID: z.string(),
   PRIVY_APP_SECRET: z.string(),
+  REDIS_URL: z.string(),
 })
 
 export const env = envSchema.parse(process.env)

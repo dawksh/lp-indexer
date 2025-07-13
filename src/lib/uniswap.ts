@@ -1,6 +1,7 @@
 import axios from "axios";
 import type { UniswapPoolDayData } from "../types/uniswap";
 import { env } from "./env";
+import redis from "./redis";
 
 const v4Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HNCFA9TyBqpo5qpe6QreQABAA1kV8g46mhkCcicu6v2R";
@@ -8,13 +9,12 @@ const v4Subgraph =
 const v3Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1";
 
-  
-  const getBalancedPoolsDaysAgo = async (days: number) => {
-      const now = new Date();
-      now.setUTCDate(now.getUTCDate() - days);
-      const timestamp = Math.floor(now.getTime() / 1000);
-      
-      const query = `
+const getBalancedPoolsDaysAgo = async (days: number) => {
+  const now = new Date();
+  now.setUTCDate(now.getUTCDate() - days);
+  const timestamp = Math.floor(now.getTime() / 1000);
+
+  const query = `
       query BalancedPoolsDaysAgo {
         poolDayDatas(
           first: 1000
@@ -44,7 +44,7 @@ const v3Subgraph =
         }
       }
       `;
-      const [v3Response, v4Response] = await Promise.all([
+  const [v3Response, v4Response] = await Promise.all([
     axios.post<{ data: { poolDayDatas: UniswapPoolDayData[] } }>(
       v4Subgraph,
       {
@@ -76,8 +76,13 @@ const v3Subgraph =
 
   const poolMap = new Map<string, UniswapPoolDayData>();
   for (const pool of allPools) {
-    const key = [pool.pool.token0.symbol, pool.pool.token1.symbol].sort().join(":");
-    if (!poolMap.has(key) || Number(pool.feesUSD) > Number(poolMap.get(key)?.feesUSD ?? 0)) {
+    const key = [pool.pool.token0.symbol, pool.pool.token1.symbol]
+      .sort()
+      .join(":");
+    if (
+      !poolMap.has(key) ||
+      Number(pool.feesUSD) > Number(poolMap.get(key)?.feesUSD ?? 0)
+    ) {
       poolMap.set(key, pool);
     }
   }
@@ -85,9 +90,22 @@ const v3Subgraph =
     .sort((a, b) => Number(b.feesUSD) - Number(a.feesUSD))
     .slice(0, 10)
     .map((pool) => ({
-        ...pool,
-        apr: (Number(pool.feesUSD) / Number(pool.tvlUSD)) * (365) * 100
-    }))
+      ...pool,
+      apr: (Number(pool.feesUSD) / Number(pool.tvlUSD)) * 365 * 100,
+    }));
 };
 
-export { getBalancedPoolsDaysAgo };
+const getBalancedPoolsDaysAgoCache = async (days: number) => {
+  const redisKey = `lastTokensGlobal::${days}`;
+  const cached = await redis.get(redisKey);
+  if (cached) {
+    console.log("🔍 Using cached lastTokensGlobal");
+    return JSON.parse(cached);
+  }
+  const lastTokens = await getBalancedPoolsDaysAgo(days);
+  await redis.set(redisKey, JSON.stringify(lastTokens), { EX: 600 });
+  console.log("🔍 Using fresh lastTokensGlobal");
+  return lastTokens;
+};
+
+export { getBalancedPoolsDaysAgoCache };
