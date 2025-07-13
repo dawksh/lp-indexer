@@ -4,17 +4,29 @@ import { getBalancedPoolsDaysAgo } from "./lib/uniswap";
 import { Markup } from "telegraf";
 import type { UniswapPoolDayData } from "./types/uniswap";
 import { abbreviateNumbers } from "./lib/utils";
+import { getOrCreateWallet } from "./lib/privy";
+import { formatEther } from "viem";
 let lastTokens: (UniswapPoolDayData & { apr: number })[] = [];
 
 bot.launch(() => {
     console.log("🚀 Bot started");
 })
 
-bot.command("start", (ctx) => {
-    ctx.reply("hello, welcome to caesar's bot");
+bot.command("start", async (ctx) => {
+    const userId = ctx.from?.id;
+    const user = await getOrCreateWallet(userId.toString(), ctx.from?.username || "");
+    ctx.reply(`
+🏦 welcome to caesar's bot\n
+🚀 Your gateway to aping into LPs easily\n
+💰 Your wallet address: <code>${user?.wallet?.address}</code>
+🤑 Your wallet balance: ${formatEther(user?.balance)} ETH\n
+🔍 /lp to see the trending pools
+    `, {
+        parse_mode: "HTML"
+    });
 })
 
-bot.command("ape", async (ctx) => {
+bot.command("lp", async (ctx) => {
     lastTokens = await getBalancedPoolsDaysAgo(1);
     let msg = "Choose a token from the below trending list:\n\n";
     const rows = lastTokens.map((pool, i) => [
