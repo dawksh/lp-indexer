@@ -117,7 +117,7 @@ Select Amount to add to LP\n
       ctx.reply("Insufficient balance");
       return;
     }
-    
+
     if (pool && user) {
       ctx.answerCbQuery();
       ctx.reply(`Adding LP... ${amount} ${token}`);

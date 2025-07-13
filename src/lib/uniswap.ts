@@ -70,8 +70,8 @@ const getBalancedPoolsDaysAgo = async (days: number) => {
   ]);
 
   const allPools = [
-    ...v3Response.data.data.poolDayDatas,
-    ...v4Response.data.data.poolDayDatas,
+    ...v3Response.data.data.poolDayDatas.map((pool) => ({ ...pool, source: "v3" as const })),
+    ...v4Response.data.data.poolDayDatas.map((pool) => ({ ...pool, source: "v4" as const })),
   ];
 
   const poolMap = new Map<string, UniswapPoolDayData>();

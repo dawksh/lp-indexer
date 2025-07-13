@@ -17,6 +17,7 @@ type UniswapPoolDayData = {
   tvlUSD: string
   txCount: string
   volumeUSD: string
+  source: "v3" | "v4"
 }
 
 export type { UniswapPoolDayData };
