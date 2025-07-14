@@ -1,4 +1,5 @@
 import { createPublicClient, http } from "viem";
+import { encodeFunctionData } from "viem";
 import type { UniswapPoolDayData } from "../types/uniswap";
 
 import { Token, ChainId, Ether } from "@uniswap/sdk-core";
@@ -37,7 +38,7 @@ const addLiquidity = async (amount: string, pool: UniswapPoolDayData) => {
   }
 };
 
-const addLiquidityV3 = async (amount: string, pool: UniswapPoolDayData) => {
+const addLiquidityV4 = async (amount: string, pool: UniswapPoolDayData) => {
   const PAIR_TOKEN = new Token(
     ChainId.BASE,
     pool.pool.id,
@@ -57,7 +58,7 @@ const addLiquidityV3 = async (amount: string, pool: UniswapPoolDayData) => {
     client.readContract({
       address: STATE_VIEW_CONTRACT_ADDRESS,
       abi: STATE_VIEW_ABI,
-      functionName: "getFeeGrowthGlobals",
+      functionName: "getSlot0",
       args: [poolId as `0x${string}`],
     }),
     client.readContract({
@@ -72,19 +73,47 @@ const addLiquidityV3 = async (amount: string, pool: UniswapPoolDayData) => {
   const currentTick = slot0[1];
   const currentLiquidity = liquidity;
 
-  const uniswapPool = new Pool(
-    ETH_TOKEN,
-    PAIR_TOKEN,
-    Number(pool.pool.feeTier),
-    Number(pool.pool.tickSpacing),
-    pool.pool.hooks || "0x0000000000000000000000000000000000000000",
-    sqrtPriceX96Current?.toString() || "0",
-    currentLiquidity.toString(),
-    currentTick || 0,
-  );
+  const tickSpacing = Number(pool.pool.tickSpacing);
+  const tickLower = Math.floor((currentTick - tickSpacing * 10) / tickSpacing) * tickSpacing;
+  const tickUpper = Math.ceil((currentTick + tickSpacing * 10) / tickSpacing) * tickSpacing;
+  const liquidityDelta = BigInt(amount);
+  const recipient = "0x0000000000000000000000000000000000000000";
+  const hooksData = "0x";
 
+  const POOL_MANAGER_ADDRESS = "0x4200000000000000000000000000000000000002";
+  const POOL_MANAGER_ABI = [
+    {
+      "inputs": [
+        { "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
+        { "internalType": "int24", "name": "tickLower", "type": "int24" },
+        { "internalType": "int24", "name": "tickUpper", "type": "int24" },
+        { "internalType": "int256", "name": "liquidityDelta", "type": "int256" },
+        { "internalType": "address", "name": "recipient", "type": "address" },
+        { "internalType": "bytes", "name": "hookData", "type": "bytes" }
+      ],
+      "name": "modifyPosition",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ];
+
+  const calldata = encodeFunctionData({
+    abi: POOL_MANAGER_ABI,
+    functionName: "modifyPosition",
+    args: [
+      poolId,
+      tickLower,
+      tickUpper,
+      liquidityDelta,
+      recipient,
+      hooksData
+    ]
+  });
+
+  return { calldata, poolId, tickLower, tickUpper, liquidityDelta, recipient, hooksData };
 };
 
-const addLiquidityV4 = async (amount: string, pool: UniswapPoolDayData) => {};
+const addLiquidityV3 = async (amount: string, pool: UniswapPoolDayData) => {};
 
 export { addLiquidity };
