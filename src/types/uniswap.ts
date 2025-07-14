@@ -4,6 +4,8 @@ type UniswapPoolToken = {
 
 type UniswapPool = {
   id: string
+  hooks?: string
+  tickSpacing?: string
   feeTier: string
   token0: UniswapPoolToken
   token1: UniswapPoolToken

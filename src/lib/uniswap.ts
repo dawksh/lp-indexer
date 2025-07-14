@@ -9,46 +9,51 @@ const v4Subgraph =
 const v3Subgraph =
   "https://gateway.thegraph.com/api/subgraphs/id/HMuAwufqZ1YCRmzL2SfHTVkzZovC9VL2UAKhjvRqKiR1";
 
+const getQuery = (source: "v3" | "v4", timestamp: number) => {
+  return `
+  query BalancedPoolsDaysAgo {
+    poolDayDatas(
+      first: 100
+      orderBy: feesUSD
+      orderDirection: desc
+      where: {
+        date_gte: ${timestamp}
+        tvlUSD_gte: 100000
+      }
+    ) {
+      pool {
+        id
+        ${source === "v4" ? "hooks" : ""}
+        ${source === "v4" ? "tickSpacing" : ""}
+        token0 {
+          symbol
+        }
+        token1 {
+          symbol
+        }
+        feeTier
+        totalValueLockedUSD
+      }
+      date
+      volumeUSD
+      feesUSD
+      tvlUSD
+      txCount
+    }
+  }
+  `;
+}
+
 const getBalancedPoolsDaysAgo = async (days: number) => {
   const now = new Date();
   now.setUTCDate(now.getUTCDate() - days);
   const timestamp = Math.floor(now.getTime() / 1000);
 
-  const query = `
-      query BalancedPoolsDaysAgo {
-        poolDayDatas(
-          first: 1000
-          orderBy: feesUSD
-          orderDirection: desc
-          where: {
-            date_gte: ${timestamp}
-            tvlUSD_gte: 100000
-          }
-        ) {
-          pool {
-            id
-            token0 {
-              symbol
-            }
-            token1 {
-              symbol
-            }
-            feeTier
-            totalValueLockedUSD
-          }
-          date
-          volumeUSD
-          feesUSD
-          tvlUSD
-          txCount
-        }
-      }
-      `;
   const [v3Response, v4Response] = await Promise.all([
     axios.post<{ data: { poolDayDatas: UniswapPoolDayData[] } }>(
       v4Subgraph,
       {
-        query: query,
+        query: getQuery("v4", timestamp),
       },
       {
         headers: {
@@ -59,7 +64,7 @@ const getBalancedPoolsDaysAgo = async (days: number) => {
     axios.post<{ data: { poolDayDatas: UniswapPoolDayData[] } }>(
       v3Subgraph,
       {
-        query: query,
+        query: getQuery("v3", timestamp),
       },
       {
         headers: {
